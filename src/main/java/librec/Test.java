@@ -1,5 +1,7 @@
 package librec;
 
+import static com.github.lbfgs4j.liblbfgs.LbfgsConstant.LineSearch.LBFGS_LINESEARCH_DEFAULT;
+
 import java.io.BufferedReader;
 import java.io.File;
 import java.io.FileReader;
@@ -7,8 +9,11 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Scanner;
+import java.util.Set;
 
 import librec.data.DenseMatrix;
 import librec.data.MatrixEntry;
@@ -19,6 +24,7 @@ import org.json.JSONObject;
 
 import com.github.lbfgs4j.LbfgsMinimizer;
 import com.github.lbfgs4j.liblbfgs.Function;
+import com.github.lbfgs4j.liblbfgs.LbfgsConstant.LBFGS_Param;
 import com.google.common.collect.BiMap;
 import com.google.common.collect.HashBasedTable;
 import com.google.common.collect.HashBiMap;
@@ -87,6 +93,7 @@ public class Test{
 				ex.printStackTrace();
 			}
 		}
+		
 		for(int i =0 ; i<wordIds.size(); i++){
 			String word = wordIds.inverse().get(i);
 			for(int j =0 ; j<docIds.size(); j++){
@@ -98,8 +105,6 @@ public class Test{
 			}
 		}
 		final SparseMatrix sm1 = new SparseMatrix(userIds.size(),itemIds.size(),dataRatingTable);
-		final SparseMatrix sm3 = new SparseMatrix(userIds.size(),itemIds.size(),dataReviewTable);
-		final SparseMatrix sm2 = new SparseMatrix(docIds.size(),wordIds.size(),dataWordToReviewTable);
 		// x[0] là muy
 		// x[1] là kappa
 		// x[2 -> (K+1)] là beta user
@@ -145,61 +150,17 @@ public class Test{
 //		DenseMatrix Theta = new DenseMatrix(docIds.size(),numFactor);
 		final DenseMatrix Omega = new DenseMatrix(wordIds.size(),numFactor);
 		Omega.init(0.01);
-//		List<String> ls = (docIds.inverse().get(dataReviewTable.get(0, 0)));
-//		for(String w : ls){
-//			
-//			System.out.println( w + " : "+ wordIds.get(w) + " - " + Omega.row(wordIds.get(w), true));
-//			System.out.println(dataWordToReviewTable.get(dataReviewTable.get(0, 0),wordIds.get(w)));
-//		}
-				// build Model
-//			double lostRating = 0;
-//			double lostReview = 0;
-//			
-//			for(MatrixEntry me : sm1){
-//				int u = me.row();
-//				int j = me.column();
-//				double ruj = me.get();
-//				double pred = alpha + userBias.get(u) + itemBias.get(j) + DenseMatrix.rowMult(P, u, Q, j);
-//				double euj = ruj - pred;
-//				lostRating += euj*euj;
-//				double userf = DenseMatrix.product(P, u, P.transpose(), u);
-//				double itemf = DenseMatrix.product(Q, j, Q.transpose(), j);
-//				lostRating += lamdaU*userf + lamdaV* itemf;
-//				lostRating += lamdaB*((Math.pow(userBias.get(u),2)) + Math.pow(itemBias.get(j), 2)); 
+		
+			
+//			List<String> ls = docIds.inverse().get(dataReviewTable.get(0, 0));
+//			Set<String> set = new HashSet<String>(ls);
+//			for(String w : set){
+//				float f = dataWordToReviewTable.get(dataReviewTable.get(0, 0),wordIds.get(w));
+//				System.out.println("word " + w + " fre = " + f);
+//				
 //			}
-//			  //lostReview
-//			for(MatrixEntry me : sm2){
-//				int u = me.row();
-//				int j = me.row();
-//				double wduj = me.get();
-//				double rujn = DenseMatrix.rowMult(Theta, u, Omega, j);
-//				for(int k =0 ; k<numFactor; k++){
-//					double thetaujk=Theta.get(u, k);
-//					thetaujk = Math.exp(kappa*1 );
-//				}
-//			}
-//		for(MatrixEntry me : sm1){
-//			int u = me.row();
-//			int v = me.column();
-//			List<Integer> lu = hm1.get(u);
-//			List<Integer> li = hm2.get(v);
-//			List<String> ls = docIds.inverse().get(dataReviewTable.get(u, v));
-//			int a = lu.get(0);
-//			int b = lu.get(1);
-//			int c = li.get(0);
-//			int d = li.get(1);
 //			
-//			
-//			//Tính (thetadij*omegan)
-//			for(String w : ls){
-//				Float f = dataWordToReviewTable.get(dataReviewTable.get(u, v),wordIds.get(w));
-//				 for(int i =0;i<5; i++){
-//					 System.out.println(w+" " +wordIds.get(w) + " : " +Omega.row(wordIds.get(w), true).get(i));
-//				 }
-//			}
-//			// tính đạo hàm
-//			
-//		}
+
 		Function f = new Function(){
 
 			@Override
@@ -208,7 +169,7 @@ public class Test{
 //						+ numFactor*wordIds.size()
 						;
 			}
-
+			
 			@Override
 			public double valueAt(double[] x) {
 				double res = 0;
@@ -230,10 +191,11 @@ public class Test{
 					
 					// thetadij
 					for(int i = 0; i<5; i++){
-					thetadij += Math.exp((Math.abs(x[1])*x[b+i]*x[d+i]));
+					thetadij += Math.exp(x[1]*Math.abs(x[b+i]*x[d+i]));
 					}
 					List<String> ls = docIds.inverse().get(dataReviewTable.get(u, v));
-					for(String w : ls){
+					Set<String> set = new HashSet<String>(ls);
+					for(String w : set){
 						float f = dataWordToReviewTable.get(dataReviewTable.get(u, v),wordIds.get(w));
 						double mul =0;
 						for(int i =0; i<5; i++){
@@ -268,6 +230,7 @@ public class Test{
 					List<Integer> lu = hm1.get(u);
 					List<Integer> li = hm2.get(v);
 					List<String> ls = docIds.inverse().get(dataReviewTable.get(u, v));
+					Set<String> set = new HashSet<String>(ls);
 					int a = lu.get(0);
 					int b = lu.get(1);
 					int c = li.get(0);
@@ -281,14 +244,14 @@ public class Test{
 					
 					// dao ham tung bien u va v
 					for(int i = 0; i<5; i++){
-						thetadij += Math.exp((Math.abs(x[1])*x[b+i]*x[d+i]));
+						thetadij += Math.exp(x[1]*Math.abs(x[b+i]*x[d+i]));
 						g[b+i] += 2*(x[d+i]*(x[0]+ x[a] + x[c] - ruj + x[b]*x[d] + x[b+1]*x[d+1] + x[b+2]*x[d+2] + x[b+3]*x[d+3] + x[b+4]*x[d+4]));
 						g[d+i] += 2*(x[b+i]*(x[0]+ x[a] + x[c] - ruj + x[b]*x[d] + x[b+1]*x[d+1] + x[b+2]*x[d+2] + x[b+3]*x[d+3] + x[b+4]*x[d+4]));
 					}
 					
 					
 					
-					for(String w : ls){
+					for(String w : set){
 						Float f = dataWordToReviewTable.get(dataReviewTable.get(u, v),wordIds.get(w));
 						double mul =0;
 						//mul la (thetadij)(omegan)^T
@@ -307,18 +270,19 @@ public class Test{
 								
 								g[1] += 2*(mul-f)*m;
 //							 dao ham u v theo review
-//							for(int i =0;i<5;i++){
-//							g[b+i] += 2*x[1]*(mul-f)*Math.abs(x[d+i])*(Math.exp(x[1]*Math.abs(x[b+i]*x[d+i]))/thetadij)
-//									  *(1-(Math.exp(x[1]*Math.abs(x[b+i]*x[d+i]))/thetadij))	
-//									  *Omega.row(wordIds.get(w), true).get(i)
-//									  *(x[b+i]/Math.abs(x[b+i]));
-//							g[d+i] += 2*x[1]*(mul-f)*Math.abs(x[b+i])*(Math.exp(x[1]*Math.abs(x[b+i]*x[d+i]))/thetadij)
-//									  *(1-(Math.exp(x[1]*Math.abs(x[b+i]*x[d+i]))/thetadij))	
-//									  *Omega.row(wordIds.get(w), true).get(i)
-//									  *(x[d+i]/Math.abs(x[d+i]));
-//							}
+							for(int i =0;i<5;i++){
+							g[b+i] += 2*x[1]*(mul-f)*Math.abs(x[d+i])*(Math.exp(x[1]*Math.abs(x[b+i]*x[d+i]))/thetadij)
+									  *(1-(Math.exp(x[1]*Math.abs(x[b+i]*x[d+i]))/thetadij))	
+									  *Omega.row(wordIds.get(w), true).get(i)
+									  *(x[b+i]/Math.abs(x[b+i]));
+							g[d+i] += 2*x[1]*(mul-f)*Math.abs(x[b+i])*(Math.exp(x[1]*Math.abs(x[b+i]*x[d+i]))/thetadij)
+									  *(1-(Math.exp(x[1]*Math.abs(x[b+i]*x[d+i]))/thetadij))	
+									  *Omega.row(wordIds.get(w), true).get(i)
+									  *(x[d+i]/Math.abs(x[d+i]));
+							}
 					}
-					}
+				}
+					
 				for(int i = 2 ; i<= userIds.size() + 1 ;i++){
 					g[i] += 2*lamdaB*x[i];
 				}
@@ -331,12 +295,20 @@ public class Test{
 				for(int i = userIds.size() + itemIds.size() + numFactor*userIds.size()+2; i<=1 +(numFactor +1)*(userIds.size() + itemIds.size());i++){
 					g[i] += 2*lamdaV*x[i];
 				}
-				return g;
+				return g; 
 			}
 			
 		};
+		
+
 		boolean verbose = true;
-	    LbfgsMinimizer minimizer = new LbfgsMinimizer(verbose);
+		LBFGS_Param param = new LBFGS_Param(
+				6, 1e-2, 0, 1e-2,
+			    50, LBFGS_LINESEARCH_DEFAULT, 20,
+			    1e-20, 1e20, 1e-4, 0.9, 0.9, 1.0e-16,
+			    0.0, 0, -1
+	    );
+	    LbfgsMinimizer minimizer = new LbfgsMinimizer(param,verbose);
 	    double[] x = minimizer.minimize(f);
 	    double min = f.valueAt(x);
 
