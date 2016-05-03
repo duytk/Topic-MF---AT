@@ -10,7 +10,6 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
-import java.util.Iterator;
 import java.util.List;
 import java.util.Scanner;
 import java.util.Set;
@@ -51,7 +50,6 @@ public class Test{
 		Stemmer s = new Stemmer();
 		String[] stopWords = readStopWords("sw.txt");
 		BufferedReader br = null;
-		int r = 0;
 		try{
 			String line;
 			br = new BufferedReader(new FileReader("D:\\a.json"));
@@ -111,10 +109,10 @@ public class Test{
 		// x[(K+2) -> (2K +1)] là beta item
 		// x[2K+2 -> nUser * K + 2K + 1] là gamma User
 		// x[nUser*K + 2K +2 -> nUser*K + nItem*K + 2K+1] là gamma Item
-		int m =2;
-		int n = userIds.size() + 2;
-		int p = userIds.size() + itemIds.size() + 2;
-		int q = userIds.size() + itemIds.size() + numFactor*userIds.size()+2;
+		int m =3;
+		int n = userIds.size() + 3;
+		int p = userIds.size() + itemIds.size() + 3;
+		int q = userIds.size() + itemIds.size() + numFactor*userIds.size()+3;	
 		for(MatrixEntry me :sm1){
 			int u = me.row();
 			int v = me.column();
@@ -165,7 +163,7 @@ public class Test{
 
 			@Override
 			public int getDimension() {				
-				return 1+1+(numFactor +1)*(userIds.size() + itemIds.size())
+				return 1+2+(numFactor +1)*(userIds.size() + itemIds.size())
 //						+ numFactor*wordIds.size()
 						;
 			}
@@ -191,7 +189,7 @@ public class Test{
 					
 					// thetadij
 					for(int i = 0; i<5; i++){
-					thetadij += Math.exp(x[1]*Math.abs(x[b+i]*x[d+i]));
+						thetadij += Math.exp(x[1]*Math.pow(x[b+i]*x[b+i],0.5) + x[2]*Math.pow(x[d+i]*x[d+i],0.5));
 					}
 					List<String> ls = docIds.inverse().get(dataReviewTable.get(u, v));
 					Set<String> set = new HashSet<String>(ls);
@@ -199,21 +197,21 @@ public class Test{
 						float f = dataWordToReviewTable.get(dataReviewTable.get(u, v),wordIds.get(w));
 						double mul =0;
 						for(int i =0; i<5; i++){
-							mul+= (Math.exp(x[1]*Math.abs(x[b+i]*x[d+i]))/thetadij) * Omega.row(wordIds.get(w), true).get(i);
+							mul+= (Math.exp(x[1]*Math.pow(x[b+i]*x[b+i],0.5) + x[2]*Math.pow(x[d+i]*x[d+i],0.5))/thetadij) * Omega.row(wordIds.get(w), true).get(i);
 						}
-						res += Math.pow(mul-f, 2);
+						res += Math.pow(mul -f,2) ;
 					}
 				}
-				for(int i = 2 ; i<= userIds.size() + 1 ;i++){
+				for(int i = 3 ; i<= userIds.size() + 2 ;i++){
 					res += lamdaB*x[i]*x[i];
 				}
-				for(int i = userIds.size() + 2; i<= userIds.size() + itemIds.size() + 1 ; i++){
+				for(int i = userIds.size() + 3; i<= userIds.size() + itemIds.size() + 2 ; i++){
 					res += lamdaB*x[i] * x[i];
 				}
-				for(int i=  userIds.size() + itemIds.size() + 2; i<= userIds.size() + itemIds.size() + numFactor*userIds.size()+1;i++ ){
+				for(int i=  userIds.size() + itemIds.size() + 3; i<= userIds.size() + itemIds.size() + numFactor*userIds.size()+2;i++ ){
 					res += lamdaU*x[i]*x[i];
 				}
-				for(int i = userIds.size() + itemIds.size() + numFactor*userIds.size()+2; i<=1 +(numFactor +1)*(userIds.size() + itemIds.size());i++){
+				for(int i = userIds.size() + itemIds.size() + numFactor*userIds.size()+3; i<=1 +(numFactor +1)*(userIds.size() + itemIds.size());i++){
 					res += lamdaV*x[i]*x[i];
 				}
 				return res;
@@ -221,7 +219,7 @@ public class Test{
 
 			@Override
 			public double[] gradientAt(double[] x) {
-				double[] g = new double[1+1 +(numFactor +1)*(userIds.size() + itemIds.size())];
+				double[] g = new double[1+2 +(numFactor +1)*(userIds.size() + itemIds.size())];
 				for(MatrixEntry me : sm1){
 					double thetadij = 0;
 					double ruj = me.get();
@@ -244,7 +242,7 @@ public class Test{
 					
 					// dao ham tung bien u va v
 					for(int i = 0; i<5; i++){
-						thetadij += Math.exp(x[1]*Math.abs(x[b+i]*x[d+i]));
+						thetadij += Math.exp(x[1]*Math.pow(x[b+i]*x[b+i],0.5) + x[2]*Math.pow(x[d+i]*x[d+i],0.5));
 						g[b+i] += 2*(x[d+i]*(x[0]+ x[a] + x[c] - ruj + x[b]*x[d] + x[b+1]*x[d+1] + x[b+2]*x[d+2] + x[b+3]*x[d+3] + x[b+4]*x[d+4]));
 						g[d+i] += 2*(x[b+i]*(x[0]+ x[a] + x[c] - ruj + x[b]*x[d] + x[b+1]*x[d+1] + x[b+2]*x[d+2] + x[b+3]*x[d+3] + x[b+4]*x[d+4]));
 					}
@@ -256,43 +254,40 @@ public class Test{
 						double mul =0;
 						//mul la (thetadij)(omegan)^T
 							for(int i =0; i<5; i++){
-								mul+= (Math.exp(x[1]*Math.abs(x[b+i]*x[d+i]))/thetadij) * Omega.row(wordIds.get(w), true).get(i);
+								mul+= (Math.exp(x[1]*Math.pow(x[b+i]*x[b+i],0.5) + x[2]*Math.pow(x[d+i]*x[d+i],0.5))/thetadij) * Omega.row(wordIds.get(w), true).get(i);
 							}
-						double l = 0;	
-							for(int i =0; i<5; i++){
-								l+= (Math.exp(x[1]*Math.abs(x[b+i]*x[d+i]))/thetadij) * (Math.abs(x[b+i])*Math.abs(x[d+i]));
-							}
-						double m=0;
-							for(int i =0; i<5; i++){
-								m += (Math.abs(x[b+i])*Math.abs(x[d+i]) - l)*((Math.exp(x[1]*Math.abs(x[b+i]*x[d+i]))/thetadij)*Omega.row(wordIds.get(w), true).get(i));
-							}
+						
 							// dao ham cua K
-								
-								g[1] += 2*(mul-f)*m;
+							for(int i = 0;i<5;i++){
+								g[1] += 2*(mul-f)*(Math.exp(x[1]*Math.pow(x[b+i]*x[b+i],0.5) + x[2]*Math.pow(x[d+i]*x[d+i],0.5))/thetadij) * Omega.row(wordIds.get(w), true).get(i)
+										*(1- (Math.exp(x[1]*Math.pow(x[b+i]*x[b+i],0.5) + x[2]*Math.pow(x[d+i]*x[d+i],0.5))/thetadij))*Math.pow(x[b+i]*x[b+i],0.5);
+								g[2] += 2*(mul-f)*(Math.exp(x[1]*Math.pow(x[b+i]*x[b+i],0.5) + x[2]*Math.pow(x[d+i]*x[d+i],0.5))/thetadij) * Omega.row(wordIds.get(w), true).get(i)
+										*(1- (Math.exp(x[1]*Math.pow(x[b+i]*x[b+i],0.5) + x[2]*Math.pow(x[d+i]*x[d+i],0.5))/thetadij))*Math.pow(x[d+i]*x[d+i],0.5);
+							}
 //							 dao ham u v theo review
 							for(int i =0;i<5;i++){
-							g[b+i] += 2*x[1]*(mul-f)*Math.abs(x[d+i])*(Math.exp(x[1]*Math.abs(x[b+i]*x[d+i]))/thetadij)
-									  *(1-(Math.exp(x[1]*Math.abs(x[b+i]*x[d+i]))/thetadij))	
-									  *Omega.row(wordIds.get(w), true).get(i)
-									  *(x[b+i]/Math.abs(x[b+i]));
-							g[d+i] += 2*x[1]*(mul-f)*Math.abs(x[b+i])*(Math.exp(x[1]*Math.abs(x[b+i]*x[d+i]))/thetadij)
-									  *(1-(Math.exp(x[1]*Math.abs(x[b+i]*x[d+i]))/thetadij))	
-									  *Omega.row(wordIds.get(w), true).get(i)
-									  *(x[d+i]/Math.abs(x[d+i]));
+								double t1 = x[b+i]/Math.abs(x[b+i]);
+								double t2 = x[d+i]/Math.abs(x[d+i]);
+ 							g[b+i] += 2*x[1]*(mul-f)*(Math.exp(x[1]*Math.pow(x[b+i]*x[b+i],0.5) + x[2]*Math.pow(x[d+i]*x[d+i],0.5))/thetadij)
+									  *(1-(Math.exp(x[1]*Math.pow(x[b+i]*x[b+i],0.5) + x[2]*Math.pow(x[d+i]*x[d+i],0.5))/thetadij))	
+									  *Omega.row(wordIds.get(w), true).get(i);
+							g[d+i] += 2*x[2]*(mul-f)*(Math.exp(x[1]*Math.pow(x[b+i]*x[b+i],0.5) + x[2]*Math.pow(x[d+i]*x[d+i],0.5))/thetadij)
+									  *(1-(Math.exp(x[1]*Math.pow(x[b+i]*x[b+i],0.5) + x[2]*Math.pow(x[d+i]*x[d+i],0.5))/thetadij))	
+									  *Omega.row(wordIds.get(w), true).get(i);
 							}
 					}
 				}
 					
-				for(int i = 2 ; i<= userIds.size() + 1 ;i++){
+				for(int i = 3 ; i<= userIds.size() + 2 ;i++){
 					g[i] += 2*lamdaB*x[i];
 				}
-				for(int i = userIds.size() + 2; i<= userIds.size() + itemIds.size() + 1 ; i++){
+				for(int i = userIds.size() + 3; i<= userIds.size() + itemIds.size() + 2 ; i++){
 					g[i] += 2*lamdaB*x[i];
 				}
-				for(int i=  userIds.size() + itemIds.size() + 2; i<= userIds.size() + itemIds.size() + numFactor*userIds.size()+1;i++ ){
+				for(int i=  userIds.size() + itemIds.size() + 3; i<= userIds.size() + itemIds.size() + numFactor*userIds.size()+2;i++ ){
 					g[i] += 2*lamdaU*x[i];
 				}
-				for(int i = userIds.size() + itemIds.size() + numFactor*userIds.size()+2; i<=1 +(numFactor +1)*(userIds.size() + itemIds.size());i++){
+				for(int i = userIds.size() + itemIds.size() + numFactor*userIds.size()+3; i<=1 +(numFactor +1)*(userIds.size() + itemIds.size());i++){
 					g[i] += 2*lamdaV*x[i];
 				}
 				return g; 
@@ -308,7 +303,7 @@ public class Test{
 			    1e-20, 1e20, 1e-4, 0.9, 0.9, 1.0e-16,
 			    0.0, 0, -1
 	    );
-	    LbfgsMinimizer minimizer = new LbfgsMinimizer(param,verbose);
+	    LbfgsMinimizer minimizer = new LbfgsMinimizer(verbose);
 	    double[] x = minimizer.minimize(f);
 	    double min = f.valueAt(x);
 
