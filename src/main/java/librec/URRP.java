@@ -121,11 +121,12 @@ public class URRP {
 		x = HashBasedTable.create();
 		// topic-assignments for each word
 		z = HashBasedTable.create();
-		Stemmer s = new Stemmer();
+//		Stemmer s = new Stemmer();
 		String[] stopWords = readStopWords("sw.txt");
 		BufferedReader br = null;
 		try{
 			String line;
+			int size = 0;
 			br = new BufferedReader(new FileReader("D:\\a.json"));
 			while ((line = br.readLine()) != null){
 				JSONObject json = new JSONObject(line);
@@ -143,20 +144,22 @@ public class URRP {
 				reviewText= reviewText.trim().replace("\\s+", "").replace(".", "").replace(",", "").replace("-", "").replace("!", "").replace("(", "").replace(")", "")
 							.replace("&quot;", "").replace("%", "").replace("#", "").replace("*", "").replace("?", "").replace("'", "").replace(":", "").replace("$", "")
 							.replace(";", "").replace("&amp;", "");
-				String[] words = reviewText.split(" ");
+				String[] words = reviewText.split(" ");				
 				List<String> wordList = new ArrayList<>();
 				for(int m=0; m < words.length ; m++){
 					if(isStopWord(words[m],stopWords)== false && StringUtils.isNumeric(words[m]) == false){
-						words[m] = s.stem(words[m]);
+//						words[m] = s.stem(words[m]);
 						wordList.add(words[m]);
 						int colW = wordIds.containsKey(words[m]) ? wordIds.get(words[m]) : wordIds.size();
 						wordIds.put(words[m], colW);
 					}
 				}
+					size += wordList.size();		
 				int rowD = docIds.containsKey(wordList) ? docIds.get(wordList) : docIds.size();
 				dataReviewTable.put(row, col, rowD);
 				docIds.put(wordList, rowD);
 			}
+			System.out.println(wordIds.size() +" và "+  size);
 		}catch(IOException e){
 			e.printStackTrace();
 		}finally{
@@ -267,6 +270,9 @@ public class URRP {
 					break;
 				}
 			}
+			if(t1 == 5){
+				t1 = 4;
+			}
 			x.put(u, v, t1);
 			Muk.add(u,t1,1);
 			Mu.add(u,1);
@@ -279,6 +285,7 @@ public class URRP {
 			for(String w : ls){
 				int n = wordIds.get(w);
 				int t2 = z.get(m, n);
+				
 				Nkw.add(t2, n, -1);
 				Nk.add(t2, -1);
 				Nuk.add(u,t2,-1);
@@ -297,6 +304,9 @@ public class URRP {
 				for (t2 = 0; t2 < p2.length; t2++) {
 					if (rand2 < p2[t2])
 						break;
+				}
+				if(t2 == 5){
+					t2 = 4;
 				}
 				// new topic
 				z.put(m, n, t2);
@@ -377,6 +387,7 @@ public class URRP {
 		for(int k=0; k<numFactor; k++){
 			for(int w = 0; w< wordIds.size(); w++){
 				val = (Nkw.get(k, w) + beta.get(w))/(Nk.get(k) + sumBeta);
+				Pkw.add(k, w, val);
 			}
 		}
 		
@@ -427,7 +438,7 @@ public class URRP {
 		estimateParams();
 		int numCount =0;
 		double sum =0;
-		for(MatrixEntry me : validMatrix){
+		for(MatrixEntry me : trainMatrix){
 			int u = me.row();
 			int v = me.column();
 			double rate = me.get();
@@ -459,7 +470,7 @@ public class URRP {
 	public static void main(String[] args) throws Exception{
 		// khoi tao data
 		init();
-		int iter = 50;
+		int iter = 100;
 		int burn_in = 30;
 		int sampleLag = 10;
 		for(int i = 1 ; i <= iter; i++){
@@ -498,6 +509,9 @@ public class URRP {
 			sum += err*err;
 			numCount++;
 		}
+		System.out.println("number of user = " + userIds.size());
+		System.out.println("number of item = " + itemIds.size());
+		System.out.println("number of word = " + wordIds.size());
 		System.out.println("MSE :" + sum/numCount );
 		
 	}
