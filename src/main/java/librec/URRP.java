@@ -1,9 +1,10 @@
 package librec;
 
 import java.io.BufferedReader;
-import java.io.File;
 import java.io.FileReader;
 import java.io.IOException;
+import java.io.InputStream;
+import java.io.InputStreamReader;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashSet;
@@ -16,34 +17,48 @@ import librec.data.DenseMatrix;
 import librec.data.DenseVector;
 import librec.data.MatrixEntry;
 import librec.data.SparseMatrix;
+import librec.util.FileIO;
 import librec.util.Logs;
 import static librec.util.Gamma.digamma;
 
 import org.apache.commons.lang.StringUtils;
+import org.json.JSONArray;
 import org.json.JSONObject;
 
 import com.google.common.collect.BiMap;
 import com.google.common.collect.HashBasedTable;
 import com.google.common.collect.HashBiMap;
 import com.google.common.collect.Table;
-import com.uttesh.exude.stemming.Stemmer;
 
 
 
 public class URRP {
-	private static BiMap<String, Integer> userIds, itemIds , wordIds;
+	//so luong factor va attitude , mac dinh la 5
 	private static int numFactor = 5;
+	// luu nguoi dung , san pham , tu vao cac map chua key va value
+	private static BiMap<String, Integer> userIds, itemIds , wordIds;
+	// luu cac doc duoi dang key la list cac tu trong doc, value la gia tri integer
 	private static BiMap<List<String>, Integer> docIds;
+	// luu cac gia tri rating(1->5)
 	private static Set<Double> rati;
+	// du lieu train
 	private static SparseMatrix trainMatrix;
+	// du lieu test
 	private static SparseMatrix testMatrix;
+	// du lieu valid
 	private static SparseMatrix validMatrix;
+	// cac sieu tham so
 	private static DenseVector alpha,beta,lamda;
+	// chua du lieu rating theo cap (user,item,rating)
 	static Table<Integer,Integer,Double> dataRatingTable;
+	// chua du lieu rating theo cap (user,item,doc)
 	static Table<Integer,Integer,Integer> dataReviewTable;
+	//  attitude ( user,item,attitude)
 	static Table<Integer,Integer,Integer> x;
+	// topic  ( doc,word,topic)
 	static Table<Integer,Integer,Integer> z;
 	static List<Double> ratingScale;
+	//cac bien dem
 	static DenseMatrix Puk;
 	static DenseMatrix Pkw;
 	static double[][][] Pkir;
@@ -58,25 +73,32 @@ public class URRP {
 	
 	static int[][][] Ckvs;
 	static DenseMatrix Ckv;
-	// size of statistics
+	// thong ke so lan thuc hien
 	static int numStats;
 	
 	//posterior probabilities
 	static DenseMatrix pPuk;
 	static DenseMatrix pPkw;
 	static double[][][] pPkir;
+	// gia tri MSE tinh truoc do
 	private static double preMSE;
 	public static String[] readStopWords(String file){
 		String[] stopWords = null;
 		
 		try{
-			Scanner sfile = new Scanner(new File(file));
-			int n = sfile.nextInt();
+			ClassLoader classLoader = URRP.class.getClassLoader();
+			InputStream in = classLoader.getResourceAsStream(file);
+			BufferedReader input = new BufferedReader(new InputStreamReader(in));
+			int n = Integer.parseInt(input.readLine());
 			stopWords = new String[n];
-			for(int i =0; i < n ; i++){
-				stopWords[i] = sfile.next();	
+			String line ;
+			int i =0;
+			while ((line = input.readLine()) != null){
+			stopWords[i] = line;
+			i++;
 			}
-			sfile.close();
+		 input.close();
+		 in.close();
 		}catch(IOException e){
 			e.printStackTrace();
 		}
@@ -107,9 +129,153 @@ public class URRP {
 	    {
 		return word1.compareToIgnoreCase(word2);
 	    }
-	 
+	
+	 protected static void init2() throws Exception{
+			userIds = HashBiMap.create();
+			itemIds = HashBiMap.create();
+			wordIds = HashBiMap.create();
+			docIds = HashBiMap.create();
+			rati = new HashSet<>();
+			dataRatingTable = HashBasedTable.create();
+			dataReviewTable = HashBasedTable.create();
+			//attitude-assignments for each rating
+			x = HashBasedTable.create();
+			// topic-assignments for each word
+			z = HashBasedTable.create();
+//			Stemmer s = new Stemmer();
+			String[] stopWords = readStopWords("sw.txt");
+			BufferedReader br = null;
+			try{
+				String line;
+				//doc file
+				int count = 0;
+				br = new BufferedReader(new FileReader("D:\\b.json"));
+				while ((line = br.readLine()) != null){
+					JSONObject json = new JSONObject(line);
+					String hotelInfo = json.get("HotelInfo").toString();
+					String Reviews = json.get("Reviews").toString();
+					JSONObject jsonHotel = new JSONObject(hotelInfo);
+					String item = jsonHotel.get("HotelID").toString();
+					int col = itemIds.containsKey(item) ? itemIds.get(item) : itemIds.size();
+					itemIds.put(item, col);
+					
+					
+					JSONArray ja = new JSONArray(Reviews);
+					for(int i =0; i< ja.length(); i++){
+						JSONObject jsonUser = ja.getJSONObject(i);
+						String user = jsonUser.get("Author").toString();
+						int row = userIds.containsKey(user) ? userIds.get(user) : userIds.size();
+						userIds.put(user, row);
+						String Ratings = jsonUser.get("Ratings").toString();
+						JSONObject jsonRat = new JSONObject(Ratings);					
+						Double rate = jsonRat.getDouble("Overall");
+						rati.add(rate);
+						dataRatingTable.put(row, col, rate);
+						String reviewText = jsonUser.get("Content").toString().toLowerCase();
+						reviewText = reviewText.toLowerCase();
+						reviewText= reviewText.trim().replace("\\s+", "").replace(".", "").replace(",", "").replace("-", "").replace("!", "").replace("(", "").replace(")", "")
+									.replace("&quot;", "").replace("%", "").replace("#", "").replace("*", "").replace("?", "").replace("'", "").replace(":", "").replace("$", "")
+									.replace(";", "").replace("&amp;", "");
+						String[] words = reviewText.split(" ");				
+						List<String> wordList = new ArrayList<>();
+						for(int m=0; m < words.length ; m++){
+							if(isStopWord(words[m],stopWords)== false && StringUtils.isNumeric(words[m]) == false){
+//								words[m] = s.stem(words[m]);
+								wordList.add(words[m]);
+								int colW = wordIds.containsKey(words[m]) ? wordIds.get(words[m]) : wordIds.size();
+								wordIds.put(words[m], colW);
+							}
+						}
+						count = count + wordList.size();
+						int rowD = docIds.containsKey(wordList) ? docIds.get(wordList) : docIds.size();
+						dataReviewTable.put(row, col, rowD);
+						docIds.put(wordList, rowD);
+					}
+						
+					
+				}
+			}catch(IOException e){
+				e.printStackTrace();
+			}finally{
+				try{
+					if( br !=null) br.close();
+				}catch(IOException ex){
+					ex.printStackTrace();
+				}
+			}
+			ratingScale = new ArrayList<>(rati);
+			Collections.sort(ratingScale);
+			SparseMatrix sm1 = new SparseMatrix(userIds.size(),itemIds.size(),dataRatingTable);
+//			for (MatrixEntry me : sm1){
+//				List<String> datax = new ArrayList<>();
+//				if (me.get() != 0){
+//					datax.add(me.row()+" "+ me.column()+" "+ me.get());
+//					FileIO.writeList("D:\\rating.txt", datax,true);
+//				}
+//			}
+			DataSplitter ds = new DataSplitter(sm1);
+			SparseMatrix[] data = ds.getRatio(0.8,0.1);
+			trainMatrix = data[0];
+			validMatrix = data[1];
+			testMatrix = data[2];
+			
+			alpha = new DenseVector(numFactor);
+			alpha.setAll(0.1);
+			beta = new DenseVector(wordIds.size());
+			beta.setAll(0.1);
+			lamda = new DenseVector(ratingScale.size());
+			lamda.setAll(0.1);
+			
+			//phi
+			Puk = new DenseMatrix(userIds.size(),numFactor);
+			//theta
+			Pkw = new DenseMatrix(numFactor,wordIds.size());
+			// poison
+			Pkir = new double[numFactor][itemIds.size()][ratingScale.size()];
+			
+			
+			// bien dem
+			Nkw = new DenseMatrix(numFactor,wordIds.size());
+			Nk = new DenseVector(numFactor);
+			
+			Nuk = new DenseMatrix(userIds.size(), numFactor);
+			Nu = new DenseVector(userIds.size());
+			
+			Muk = new DenseMatrix(userIds.size(),numFactor);
+			Mu = new DenseVector(userIds.size());
+			
+			Ckvs = new int[numFactor][itemIds.size()][ratingScale.size()];
+			Ckv = new DenseMatrix(numFactor,itemIds.size());
+			// khoi tao cac bien dem
+			
+			for(MatrixEntry me : trainMatrix){
+				int u = me.row();
+				int v = me.column();
+				double ruv = me.get();
+				int r = ratingScale.indexOf(ruv);
+				int t1 = (int) (Math.random()*numFactor);
+				
+				x.put(u, v, t1);
+				Muk.add(u,t1,1);
+				Mu.add(u,1);
+				Ckvs[t1][v][r] ++;
+				Ckv.add(t1,v,1);
+				List<String> ls = docIds.inverse().get(dataReviewTable.get(u, v));
+				int m =docIds.get(ls);
+				for(String w : ls){
+					int t2 = (int) (Math.random() * numFactor);
+					int n = wordIds.get(w);
+					z.put(m, n, t2);
+					Nkw.add(t2,n,1);
+					Nk.add(t2,1);
+					Nuk.add(u, t2, 1);
+					Nu.add(u,1);
+				}
+			}
+		}
 	// khoi tao 
-	protected static void init(){
+	protected static void init(String path) throws Exception{
+
 		userIds = HashBiMap.create();
 		itemIds = HashBiMap.create();
 		wordIds = HashBiMap.create();
@@ -126,8 +292,9 @@ public class URRP {
 		BufferedReader br = null;
 		try{
 			String line;
-			int size = 0;
-			br = new BufferedReader(new FileReader("D:\\a.json"));
+			//doc file
+			int count =0;
+			br = new BufferedReader(new FileReader(path));
 			while ((line = br.readLine()) != null){
 				JSONObject json = new JSONObject(line);
 				String user = json.getString("reviewerID");
@@ -139,7 +306,7 @@ public class URRP {
 				rati.add(rate);
 				itemIds.put(item, col);
 				dataRatingTable.put(row, col, rate);
-				String reviewText = json.getString("reviewText");
+				String reviewText = json.getString("reviewText").toLowerCase();
 				reviewText = reviewText.toLowerCase();
 				reviewText= reviewText.trim().replace("\\s+", "").replace(".", "").replace(",", "").replace("-", "").replace("!", "").replace("(", "").replace(")", "")
 							.replace("&quot;", "").replace("%", "").replace("#", "").replace("*", "").replace("?", "").replace("'", "").replace(":", "").replace("$", "")
@@ -154,12 +321,11 @@ public class URRP {
 						wordIds.put(words[m], colW);
 					}
 				}
-					size += wordList.size();		
+				count = count + wordList.size();
 				int rowD = docIds.containsKey(wordList) ? docIds.get(wordList) : docIds.size();
 				dataReviewTable.put(row, col, rowD);
 				docIds.put(wordList, rowD);
 			}
-			System.out.println(wordIds.size() +" và "+  size);
 		}catch(IOException e){
 			e.printStackTrace();
 		}finally{
@@ -173,6 +339,13 @@ public class URRP {
 		Collections.sort(ratingScale);
 		SparseMatrix sm1 = new SparseMatrix(userIds.size(),itemIds.size(),dataRatingTable);
 		DataSplitter ds = new DataSplitter(sm1);
+//		for (MatrixEntry me : sm1){
+//			List<String> datax = new ArrayList<>();
+//			if (me.get() != 0){
+//				datax.add(me.row()+" "+ me.column()+" "+ me.get());
+//				FileIO.writeList("D:\\rating.txt", datax,true);
+//			}
+//		}
 		SparseMatrix[] data = ds.getRatio(0.8,0.1);
 		trainMatrix = data[0];
 		validMatrix = data[1];
@@ -259,11 +432,11 @@ public class URRP {
 						(Ckvs[k][v][r] + lamda.get(r))/
 						(Ckv.get(k, v) + sumLamda);
 			}
-			// cumulate multinomial parameters
+			// don cac tham so da thuc 
 			for(int k =1; k< p1.length; k++){
 				p1[k] += p1[k-1];
 			}
-			// scaled sample because of unnormalized p[],
+			// chuan hoa lai cac p[],
 			double rand1 = Math.random() * p1[numFactor - 1];
 			for(t1 =0; t1<p1.length; t1++){
 				if(rand1 <p1[t1]){
@@ -391,7 +564,7 @@ public class URRP {
 			}
 		}
 		
-		//  poison - pkir
+		//   pkir
 		for(int k =0 ; k< numFactor; k++){
 			for(int v =0; v< itemIds.size(); v++){
 				for( int s=0 ; s< ratingScale.size(); s++){
@@ -403,6 +576,7 @@ public class URRP {
 		numStats++;
 	}
 	
+	// lay gia tri trung binh sao m
 	protected static void estimateParams(){
 		pPuk = Puk.scale(1.0/numStats);
 		pPkw = Pkw.scale(1.0/numStats);
@@ -438,7 +612,7 @@ public class URRP {
 		estimateParams();
 		int numCount =0;
 		double sum =0;
-		for(MatrixEntry me : trainMatrix){
+		for(MatrixEntry me : validMatrix){
 			int u = me.row();
 			int v = me.column();
 			double rate = me.get();
@@ -469,7 +643,17 @@ public class URRP {
 	}
 	public static void main(String[] args) throws Exception{
 		// khoi tao data
-		init();
+	 	Scanner sc = new Scanner(System.in);
+	 	System.out.println("Chon loai du lieu (0:TripAdvisor - 1: Amazon) :" );
+	 	int l = sc.nextInt();
+	 	switch(l){
+	 		case 0: init2(); break;
+	 		case 1: System.out.println("Nhap duong dan thu muc :" );
+		 	String path = sc.next();
+			init(path); break;
+			default : System.exit(0); break;
+	 	}
+		sc.close();
 		int iter = 100;
 		int burn_in = 30;
 		int sampleLag = 10;
@@ -505,6 +689,9 @@ public class URRP {
 			if(Double.isNaN(pre)){
 				continue;
 			}
+			List<String> datax = new ArrayList<>();
+				datax.add(me.row()+" "+ me.column()+" "+ me.get() + " "+pre);
+				FileIO.writeList("D:\\result.txt", datax,true);
 			double err = rate - pre;
 			sum += err*err;
 			numCount++;
@@ -513,6 +700,24 @@ public class URRP {
 		System.out.println("number of item = " + itemIds.size());
 		System.out.println("number of word = " + wordIds.size());
 		System.out.println("MSE :" + sum/numCount );
+//		for(int i =0; i<5 ; i++){
+//			System.out.println("chu de "+i + " ");
+//		double[] data= Pkw.row(i).getData();
+//		Arrays.sort(data);
+//		Map<Double,Integer> hm = new HashMap<>();
+//			for(int j = 0; j<wordIds.size();j++){
+//				double m = Pkw.get(i, j);
+//				hm.put(m, j);
+//			}
+//			for(int k = 1; k <=10; k++){
+//				System.out.print( wordIds.inverse().get(hm.get(data[data.length-k])) + ",");
+//				}
+//			System.out.println();
+//		}
+		
+
+		
+		
 		
 	}
 }
