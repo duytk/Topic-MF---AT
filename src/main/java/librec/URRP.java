@@ -177,7 +177,7 @@ public class URRP {
 									.replace("&quot;", "").replace("%", "").replace("#", "").replace("*", "").replace("?", "").replace("'", "").replace(":", "").replace("$", "")
 									.replace(";", "").replace("&amp;", "");
 						String[] words = reviewText.split(" ");				
-						List<String> wordList = new ArrayList<>();
+						List<String> wordList = new ArrayList<>();						
 						for(int m=0; m < words.length ; m++){
 							if(isStopWord(words[m],stopWords)== false && StringUtils.isNumeric(words[m]) == false){
 //								words[m] = s.stem(words[m]);
@@ -382,7 +382,7 @@ public class URRP {
 		
 		for(MatrixEntry me : trainMatrix){
 			int u = me.row();
-			int v = me.column();
+			int v = me.column();			
 			double ruv = me.get();
 			int r = ratingScale.indexOf(ruv);
 			int t1 = (int) (Math.random()*numFactor);
@@ -490,6 +490,8 @@ public class URRP {
 			}
 		}
 	}
+	
+	
 	
 	// cap nhat hyperparameter ( theo bai bao cap nhat Estimating a Dirichlet distribution Thomas P. Minka)
 	protected static void mStep(){
@@ -719,5 +721,12 @@ public class URRP {
 		
 		
 		
+	}
+	
+	protected static void updateTheta(int u){
+		// day cac doc cua tung user u..
+		// day cac rating cua user u...
+		// khoi tao ngau nhien vecto theta Uk ( k = 1..5)
+		//
 	}
 }
