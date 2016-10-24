@@ -716,11 +716,7 @@ public class URRP {
 //				}
 //			System.out.println();
 //		}
-		
 
-		
-		
-		
 	}
 	
 	protected static void updateTheta(int u){
